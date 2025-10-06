@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataRoots - Decentralized Data Sharing</title>
+    <link rel="icon" href="logo.jpg" type="image/jpeg">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.79/build/spline-viewer.js"></script>
+</head>
+<body>
+    <!-- Redirect script -->
+    <script>
+        // Check if this is a page refresh (type 1) or if user didn't come from landing
+        // Use a combination of checks to ensure reliability
+        const isPageRefresh = performance.navigation && performance.navigation.type === 1;
+        const isNavigated = sessionStorage.getItem('fromLanding') === 'true';
+        
+        // If this is a refresh or not navigated from landing page, redirect
+        if (isPageRefresh || !isNavigated) {
+            // Clear the flag
+            sessionStorage.removeItem('fromLanding');
+            // Redirect to landing page
+            window.location.href = 'landing.html';
+        }
+    </script>
+
+    <!-- Spline Background -->
+    <div class="spline-container">
+        <spline-viewer url="https://prod.spline.design/jcBxhhVp-UB6Lujt/scene.splinecode"></spline-viewer>
+    </div>
+
+    <!-- Notification System -->
+    <div id="notification" class="hidden">
+        <p id="notification-text"></p>
+        <button id="close-notification">×</button>
+    </div>
+
+    <header>
+        <div class="container header-container">
+            <div class="header-logo-container">
+                <img src="logo.jpg" alt="DataRoots Logo" class="header-logo-image">
+                <h1 id="main-title">DataRoots</h1>
+            </div>
+            <div id="wallet-info">
+                <div id="account-info">
+                    <p>Connected: <span id="account-address">Connecting...</span></p>
+                    <p>Balance: <span id="account-balance">Loading...</span> U2U</p>
+                </div>
+                <button id="disconnect-wallet" class="disconnect-btn" title="Disconnect Wallet">Disconnect</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="metamask-banner" class="metamask-banner hidden">
+            <div class="banner-content">
+                <img src="metamask.webp" alt="MetaMask" class="metamask-icon">
+                <div class="banner-text">
+                    <h3>MetaMask Required</h3>
+                    <p>To use this application, you need to install the MetaMask browser extension.</p>
+                </div>
+                <a href="https://metamask.io/download/" target="_blank" class="install-btn">Install MetaMask</a>
+            </div>
+            <button class="close-banner" id="close-metamask-banner">×</button>
+        </section>
+
+        <section class="tabs">
+            <button class="tab-btn active" data-tab="upload">Upload Data</button>
+            <button class="tab-btn" data-tab="my-data">My Data</button>
+            <button class="tab-btn" data-tab="browse">Data Port</button>
+            <button class="tab-btn" data-tab="requests">Requests</button>
+        </section>
+
+        <section id="upload" class="tab-content active">
+            <h2>Upload Data</h2>
+            <form id="upload-form">
+                <div class="form-group">
+                    <label for="file-upload">File</label>
+                    <input type="file" id="file-upload" required>
+                    <p class="file-info">Supported formats: PDF, DOC, DOCX, TXT, JSON, CSV</p>
+                </div>
+                <div class="form-group">
+                    <label for="data-name">Data Name</label>
+                    <input type="text" id="data-name" required placeholder="Enter a name for your data">
+                </div>
+                <div class="form-group">
+                    <label for="data-category">Category</label>
+                    <select id="data-category">
+                        <option value="0">Personal</option>
+                        <option value="1">Educational</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ipfs-hash">IPFS Hash (Optional - will be auto-generated)</label>
+                    <input type="text" id="ipfs-hash" readonly>
+                </div>
+                <button type="submit">Upload</button>
+            </form>
+        </section>
+
+        <section id="my-data" class="tab-content">
+            <h2>My Data <button id="refresh-my-data" class="refresh-btn" title="Refresh My Data">↻</button></h2>
+            <div id="user-data-list" class="data-list">
+                <p class="empty-message">Connect your wallet to view your data</p>
+            </div>
+        </section>
+
+        <section id="browse" class="tab-content">
+            <h2>Browse Available Data <button id="refresh-browse" class="refresh-btn" title="Refresh Data Pot">↻</button></h2>
+            <div id="all-data-list" class="data-list">
+                <p class="empty-message">Connect your wallet to browse data</p>
+            </div>
+        </section>
+
+        <section id="requests" class="tab-content">
+            <h2>Access Requests <button id="refresh-requests" class="refresh-btn" title="Refresh Requests">↻</button></h2>
+            <div class="requests-container">
+                <div class="requests-section">
+                    <h3>Incoming Requests</h3>
+                    <div id="incoming-requests" class="request-list">
+                        <p class="empty-message">No incoming requests</p>
+                    </div>
+                </div>
+                <div class="requests-section">
+                    <h3>Outgoing Requests</h3>
+                    <div id="outgoing-requests" class="request-list">
+                        <p class="empty-message">No outgoing requests</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2 id="modal-title">Request Access</h2>
+            <div id="modal-body">
+                <form id="request-access-form">
+                    <input type="hidden" id="data-id">
+                    <div class="form-group">
+                        <label for="access-duration">Access Duration (days)</label>
+                        <input type="number" id="access-duration" min="1" max="365" value="30">
+                    </div>
+                    <p>Price: 0.01 U2U</p>
+                    <button type="submit">Request Access</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <p>2025@DataRoots</p>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+    
+    <!-- Live Reload Script -->
+    <script>
+        // Enhanced live reload functionality
+        (function() {
+            const FILE_CHECK_INTERVAL = 3000; // Check file changes every 3 seconds
+            const BLOCKCHAIN_CHECK_INTERVAL = 10000; // Check blockchain changes every 10 seconds
+            let lastModified = new Date().getTime();
+            let lastBlockNumber = 0;
+            
+            // Function to check if any files have changed
+            function checkForFileChanges() {
+                fetch('app.js', { method: 'HEAD' })
+                    .then(response => {
+                        const fileDate = response.headers.get('last-modified');
+                        if (fileDate) {
+                            const fileTime = new Date(fileDate).getTime();
+                            if (fileTime > lastModified) {
+                                console.log('Detected file changes, reloading page...');
+                                lastModified = fileTime;
+                                location.reload();
+                            }
+                        }
+                    })
+                    .catch(err => console.error('Error checking for file changes:', err));
+            }
+            
+            // Function to check for blockchain changes
+            async function checkForBlockchainChanges() {
+                try {
+                    // Only check if the app has initialized and wallet is connected
+                    if (typeof window.provider !== 'undefined') {
+                        const currentBlockNumber = await window.provider.getBlockNumber();
+                        
+                        if (lastBlockNumber > 0 && currentBlockNumber > lastBlockNumber) {
+                            console.log(`Detected new block: ${currentBlockNumber} (previous: ${lastBlockNumber})`);
+                            
+                            // Reload content based on active tab
+                            const activeTab = document.querySelector('.tab-btn.active');
+                            if (activeTab) {
+                                const tabId = activeTab.getAttribute('data-tab');
+                                
+                                // Refresh content with true flag to indicate this is an auto-refresh
+                                switch (tabId) {
+                                    case 'my-data':
+                                        if (typeof window.loadUserData === 'function') window.loadUserData(true);
+                                        break;
+                                    case 'browse':
+                                        if (typeof window.loadAllData === 'function') window.loadAllData(true);
+                                        break;
+                                    case 'requests':
+                                        if (typeof window.loadRequests === 'function') window.loadRequests(true);
+                                        break;
+                                }
+                            }
+                        }
+                        
+                        lastBlockNumber = currentBlockNumber;
+                    }
+                } catch (error) {
+                    console.error('Error checking for blockchain changes:', error);
+                }
+            }
+            
+            // Start checking for changes
+            setInterval(checkForFileChanges, FILE_CHECK_INTERVAL);
+            setInterval(checkForBlockchainChanges, BLOCKCHAIN_CHECK_INTERVAL);
+            console.log('Enhanced live reload activated - will refresh content when changes are detected');
+        })();
+    </script>
+</body>
+</html>
